@@ -1,91 +1,106 @@
 import streamlit as st
 import google.generativeai as genai
 
+# ----------------------------
+# Setup (API Key from secrets)
+# ----------------------------
+genai.configure(api_key=st.secrets["GEMINI_API_KEY"])
+
+# ----------------------------
+# Initialize the model once
+# ----------------------------
+model = genai.GenerativeModel(
+    model_name="gemini-2.5-flash",
+    generation_config={
+        "temperature": 1,
+        "top_p": 0.95,
+        "top_k": 64,
+        "max_output_tokens": 2048,  # Reduced for faster response
+        "response_mime_type": "text/plain",
+    },
+    system_instruction=(
+        "You are an expert email writer. "
+        "Create a professional, clear, and engaging email "
+        "based on the given key points. Highlight key points in bold."
+    ),
+)
+
+# ----------------------------
+# Email generation function
+# ----------------------------
 def generate_email_script(sender_name, receiver_name, key_points):
-    """Generates an email script based on the given sender, receiver, and key points.
-
-    Args:
-        sender_name: The name of the email sender.
-        receiver_name: The name of the email receiver.
-        key_points: The key points for the email.
-
-    Returns:
-        The generated email script.
-    """
+    """Generates a professional email based on sender, receiver, and key points."""
     try:
-        # Configure API key
-        genai.configure(api_key="AIzaSyAnKEhsyH4tYpjBFSFmi7zTY2lpeWE7tpk")
-
-        # Create the model
-        generation_config = {
-            "temperature": 1,
-            "top_p": 0.95,
-            "top_k": 64,
-            "max_output_tokens": 8192,
-            "response_mime_type": "text/plain",
-        }
-        model = genai.GenerativeModel(
-            model_name="gemini-1.5-flash",
-            generation_config=generation_config,
-            system_instruction="You are an expert email writer. Create a professional and engaging email script based on the given key points.",
+        prompt = (
+            f"Create a professional email from {sender_name} to {receiver_name}.\n\n"
+            f"Include the following key points exactly and highlight them in bold:\n{key_points}\n\n"
+            "Email:"
         )
-
-        # Construct the prompt
-        prompt = (f"Create a professional email based on these key points:\n{key_points}\n\n"
-                  f"The email should be from {sender_name} to {receiver_name}.\n\nEmail:")
-
-        # Generate the email script
         response = model.generate_content(prompt)
-        email_text = response.text
-
-        # Highlight the key points in the generated email
-        for point in key_points.split('\n'):
-            email_text = email_text.replace(point, f"<strong>{point}</strong>")
-
-        return email_text
+        return response.text
     except Exception as e:
-        return f"Error: {e}"
+        return f"⚠️ Error generating email: {e}"
 
-# Streamlit application
-st.set_page_config(page_title="Email Drafting Assistant", page_icon="✉️")
+# ----------------------------
+# Streamlit UI
+# ----------------------------
+st.set_page_config(page_title="Email Drafting Assistant", page_icon="✉️", layout="wide")
 
-st.markdown("""
+# Custom CSS
+st.markdown(
+    """
     <style>
-    .title {
-        color: #4CAF50;
-        text-align: center;
-    }
-    .stButton > button {
-        background-color: #4CAF50;
-        color: white;
-        border: none;
-        padding: 15px 32px;
-        text-align: center;
-        text-decoration: none;
-        display: inline-block;
-        font-size: 16px;
-        margin: 4px 2px;
-        cursor: pointer;
-    }
+        .main-title { 
+            color: #4CAF50; 
+            text-align: center; 
+            font-size: 2.2em; 
+            font-weight: bold; 
+            margin-bottom: 20px;
+        }
+        .generated-email {
+            background-color: #f9f9f9; 
+            color: #111;  /* <-- Added text color */
+            padding: 20px; 
+            border-radius: 12px; 
+            border: 1px solid #ddd; 
+            font-family: "Courier New", monospace;
+            white-space: pre-wrap;
+            line-height: 1.5;
+        }
+        .download-btn {
+            margin-top: 10px;
+        }
     </style>
-    """, unsafe_allow_html=True)
+    """,
+    unsafe_allow_html=True,
+)
 
-st.title("Email Drafting Assistant ✉️")
+st.markdown('<p class="main-title">✉️ Email Drafting Assistant</p>', unsafe_allow_html=True)
 
-st.write("""
-    Welcome to the Email Drafting Assistant! This tool helps you create professional and engaging email drafts 
-    based on the key points you provide. Simply enter the sender's name, receiver's name, and key points, and let our AI generate the email for you!
-""")
+# Sidebar inputs
+st.sidebar.header("📌 Email Details")
+sender_name = st.sidebar.text_input("Sender's Name", placeholder="e.g., John Doe")
+receiver_name = st.sidebar.text_input("Receiver's Name", placeholder="e.g., Jane Smith")
+key_points = st.sidebar.text_area(
+    "Key Points (one per line)", 
+    placeholder="- Introduce project\n- Request meeting\n- Mention deadline"
+)
 
-sender_name = st.text_input("Enter the sender's name:", help="The name of the person sending the email.")
-receiver_name = st.text_input("Enter the receiver's name:", help="The name of the person receiving the email.")
-key_points = st.text_area("Enter the key points for the email:", help="Provide the key points you want to include in the email, each on a new line.")
-
-if st.button("Generate Email"):
+# Generate button
+if st.sidebar.button("Generate Email"):
     if sender_name and receiver_name and key_points:
-        with st.spinner("Generating your email..."):
+        with st.spinner("✍️ Drafting your email..."):
             script = generate_email_script(sender_name, receiver_name, key_points)
-        st.subheader("Generated Email:")
-        st.markdown(script, unsafe_allow_html=True)
+
+        st.subheader("📨 Generated Email")
+        st.markdown(f'<div class="generated-email">{script}</div>', unsafe_allow_html=True)
+
+        st.download_button(
+            label="📥 Download Email",
+            data=script,
+            file_name="email_draft.txt",
+            mime="text/plain",
+            key="download_email",
+        )
     else:
-        st.error("Please enter the sender's name, receiver's name, and the key points.")
+        st.sidebar.error("Please fill in all fields.")
